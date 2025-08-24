@@ -1,27 +1,25 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import http from 'http';
 import cors from 'cors';
 import { Server } from 'socket.io';
-import { setupMqttBridge } from './mqttBridge.js';
+import { setupMqttBridge } from './mqttBridge.js'; // <- .js สำคัญเมื่อใช้ ESM
 
 const app = express();
 app.use(cors({
   origin: (process.env.ALLOW_ORIGIN ?? '*').split(','),
-  credentials: true
+  credentials: true,
 }));
 
-app.get('/health', (_req: express.Request, res: express.Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: (process.env.ALLOW_ORIGIN ?? '*').split(',') }
+  cors: { origin: (process.env.ALLOW_ORIGIN ?? '*').split(',') },
 });
 
-// Hook: MQTT <-> Socket.IO
 setupMqttBridge(io);
 
 const PORT = Number(process.env.PORT ?? 8080);
