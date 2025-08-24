@@ -1,0 +1,25 @@
+html, body, #root { height: 100%; }
+body { margin: 0; font-family: ui-sans-serif, system-ui, Arial, Helvetica, sans-serif; }
+.bg-gray-50{background:#f9fafb} .bg-white{background:#fff}
+.rounded-2xl{border-radius:1rem} .rounded-xl{border-radius:.75rem}
+.shadow{box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.p-5{padding:1.25rem} .p-6{padding:1.5rem}
+.mx-auto{margin-left:auto;margin-right:auto} .max-w-6xl{max-width:72rem}
+.flex{display:flex} .grid{display:grid}
+.items-center{align-items:center} .justify-between{justify-content:space-between}
+.gap-1{gap:.25rem} .gap-2{gap:.5rem} .gap-3{gap:.75rem} .gap-4{gap:1rem}
+.text-sm{font-size:.875rem} .text-xs{font-size:.75rem}
+.text-lg{font-size:1.125rem} .text-2xl{font-size:1.5rem}
+.font-bold{font-weight:700} .font-semibold{font-weight:600}
+.text-gray-500{color:#6b7280} .text-gray-600{color:#4b5563} .text-gray-700{color:#374151}
+.bg-blue-600{background:#2563eb} .bg-emerald-600{background:#059669} .bg-amber-600{background:#d97706}
+.bg-gray-300{background:#d1d5db} .text-white{color:#fff} .text-gray-500{color:#6b7280}
+.w-24{width:6rem} .h-24{height:6rem} .w-3{width:.75rem} .h-3{height:.75rem}
+.rounded{border-radius:.25rem}
+.border{border:1px solid #e5e7eb}
+.mt-1{margin-top:.25rem} .mt-4{margin-top:1rem}
+.h-56{height:14rem} .overflow-auto{overflow:auto}
+.sm\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.lg\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (min-width:640px){.sm\:grid-cols-2{display:grid}}
+@media (min-width:1024px){.lg\:grid-cols-4{display:grid}}
