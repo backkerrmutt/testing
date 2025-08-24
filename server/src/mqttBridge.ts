@@ -1,34 +1,47 @@
-import mqtt from 'mqtt';
 import { Server } from 'socket.io';
+import mqtt from 'mqtt';
+
+type PublishPayload = { topic: string; message: string };
 
 export function setupMqttBridge(io: Server) {
-  const url = process.env.MQTT_URL!;
-  const username = process.env.MQTT_USERNAME!;
-  const password = process.env.MQTT_PASSWORD!;
+  const url = mustEnv('MQTT_URL');
+  const username = mustEnv('MQTT_USERNAME');
+  const password = mustEnv('MQTT_PASSWORD');
+  const subTopics = (process.env.SUB_TOPICS ?? '').split(',').filter(Boolean);
 
   const client = mqtt.connect(url, {
-    username,
-    password,
+    username, password,
     reconnectPeriod: 2000
   });
 
   client.on('connect', () => {
-    console.log('[MQTT] connected');
-    // subscribe topic ที่ต้องการ แล้วส่งต่อไปยัง client ทาง Socket.IO
-    client.subscribe('smartlocker/+/slot/+/status');
+    console.log('[mqtt] connected');
+    if (subTopics.length) {
+      client.subscribe(subTopics, (err) => {
+        if (err) console.error('[mqtt] subscribe error', err);
+        else console.log('[mqtt] subscribed:', subTopics);
+      });
+    }
   });
 
   client.on('message', (topic, payload) => {
-    io.emit('mqtt_msg', { topic, payload: payload.toString() });
+    const data = payload.toString();
+    io.emit('mqtt_msg', { topic, payload: data });
   });
 
-  // รับคำสั่งจากหน้าเว็บ แล้ว publish ออก MQTT
-  io.on('connection', (socket) => {
-    socket.on('publish', ({ topic, message }) => {
-      // เพิ่ม ACL/check role ตรงนี้ให้รัดกุม
-      client.publish(topic, message);
+  client.on('error', (e) => console.error('[mqtt] error', e));
+
+  // รับ event จากเว็บ → publish ออก MQTT (ใส่ ACL/role check ตรงนี้ได้)
+  io.on('connection', (socket: import("socket.io").Socket) => {
+  socket.on('publish', (body: PublishPayload) => {
+    if (!body?.topic || typeof body.message !== 'string') return;
+    client.publish(body.topic, body.message);
     });
   });
+}
 
-  client.on('error', (err) => console.error('[MQTT] error', err));
+function mustEnv(k: string): string {
+  const v = process.env[k];
+  if (!v) throw new Error(`Missing env: ${k}`);
+  return v;
 }
