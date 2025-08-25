@@ -6,7 +6,8 @@ import {
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DoorFrontIcon from "@mui/icons-material/DoorFront";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
-Cannot find module '../hooks/useLockerSocket'
+import { useLockerSocket } from "./hooks/useLockerSocket";
+
 
 
 export default function Dashboard() {

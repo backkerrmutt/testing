@@ -1,16 +1,14 @@
-// src/main.tsx
-import { createRoot } from "react-dom/client";
+import React from "react";
+import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import SmartLockerDashboard from "./SmartLockerDashboard";
-import "@fontsource/roboto/300.css";
-import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
-import "@fontsource/roboto/700.css";
+import SmartLockerDashboard from "./SmartLockerDashboard"; // ← ชี้ไฟล์จริงให้ถูก
 
-createRoot(document.getElementById("root")!).render(
-  <BrowserRouter>
-    <Routes>
-      <Route path="/" element={<Dashboard />} />
-    </Routes>
-  </BrowserRouter>
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<SmartLockerDashboard />} /> {/* ← ใช้ชื่อคอมโพเนนต์ที่ import มาจริง */}
+      </Routes>
+    </BrowserRouter>
+  </React.StrictMode>
 );
