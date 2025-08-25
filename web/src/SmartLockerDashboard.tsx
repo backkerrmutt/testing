@@ -1,232 +1,205 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { connectSocket, getSocket } from "./lib/socket";
+import { useMemo, useState } from "react";
+import {
+  Box, Button, Card, CardContent, Chip, Divider, FormControl, Grid,
+  InputLabel, MenuItem, Select, SelectChangeEvent, Stack, TextField, Typography
+} from "@mui/material";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DoorFrontIcon from "@mui/icons-material/DoorFront";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
+Cannot find module '../hooks/useLockerSocket'
 
-/** ---------- Types ---------- */
-export type SlotStatus = {
-  capacity_mm: number;
-  available: boolean;
-  door_closed: boolean;
-  slot?: number | string;
-  node?: string;
-};
 
-type MqttMsg = { topic: string; payload: string };
+export default function Dashboard() {
+  const [role, setRole] = useState<Role>("student");
+  const { connected, statusByKey, nodes, slotsByNode, sendCommand } = useLockerSocket(role);
 
-/** ---------- Helpers ---------- */
-function topicKeyFrom(topic: string) {
-  // สมมติรูปแบบ: smartlocker/{node}/slot/{slot}/{status|warning}
-  const parts = topic.split("/");
-  const node = parts[1] || "C01";
-  const slot = parts[3] || "1";
-  return { key: `${node}-${slot}`, node, slot };
-}
+  // state ของตัวเลือก
+  const [node, setNode] = useState<string>("");
+  const [slot, setSlot] = useState<number | "">("");
 
-/** ---------- Component ---------- */
-export default function SmartLockerDashboard() {
-  // connection
-  const [socketConnected, setSocketConnected] = useState(false);
+  // เผื่อกรณีไม่มีสถานะเข้ามา ยังอยากใส่มือ
+  const [manualNode, setManualNode] = useState("");
+  const [manualSlot, setManualSlot] = useState<number | "">("");
 
-  // form states (แทนตัวแปรที่ error: nodeId, slot, role)
-  const [nodeId, setNodeId] = useState("C01");
-  const [slot, setSlot] = useState("1");
-  const [role, setRole] = useState<"student" | "professor" | "admin">("admin");
+  const currentNode = node || manualNode;
+  const currentSlot = (slot === "" ? manualSlot : slot) as number | "";
 
-  // messages/log
-  const [log, setLog] = useState<string[]>([]);
-  const logRef = useRef<HTMLDivElement | null>(null);
+  const canOpenSlot = role === "student" || role === "professor" || role === "admin";
+  const canOpenDoor = role === "professor" || role === "admin";
+  const canUnlockDoor = role === "professor" || role === "admin";
 
-  // slots map (แทน setSlots / slots ที่ error)
-  const [statusByKey, setStatusByKey] = useState<Record<string, SlotStatus>>({});
+  const selectedKey = useMemo(() => {
+    if (!currentNode || currentSlot === "") return null;
+    return `${currentNode}-${currentSlot}`;
+  }, [currentNode, currentSlot]);
 
-  // connect socket once
-  useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8080";
-    const s = connectSocket(apiUrl);
+  const selectedStatus = selectedKey ? statusByKey[selectedKey] : undefined;
 
-    const onConnect = () => {
-      setSocketConnected(true);
-      setLog((prev) => [`[socket] connected`, ...prev].slice(0, 500));
-    };
-    const onDisconnect = () => {
-      setSocketConnected(false);
-      setLog((prev) => [`[socket] disconnected`, ...prev].slice(0, 500));
-    };
-    const onMqttMsg = (m: MqttMsg) => {
-      setLog((prev) => [`[mqtt] ${m.topic} — ${m.payload}`, ...prev].slice(0, 500));
+  const handleRole = (e: SelectChangeEvent) => setRole(e.target.value as Role);
 
-      // ถ้า payload เป็น JSON ที่มีฟิลด์สถานะ ให้เก็บลง map เพื่อแสดงผล
-      try {
-        const { key, node, slot } = topicKeyFrom(m.topic);
-        const parsed = JSON.parse(m.payload) as Partial<SlotStatus>;
-        setStatusByKey((prev) => ({
-          ...prev,
-          [key]: {
-            capacity_mm: Number(parsed.capacity_mm ?? 0),
-            available: Boolean(parsed.available ?? false),
-            door_closed: Boolean(parsed.door_closed ?? true),
-            node: String(parsed.node ?? node),
-            slot: String(parsed.slot ?? slot),
-          },
-        }));
-      } catch {
-        // payload ไม่ใช่ JSON ก็ข้ามไป แต่อย่างน้อย log ให้ดู
-      }
-    };
-
-    s.on("connect", onConnect);
-    s.on("disconnect", onDisconnect);
-    s.on("mqtt_msg", onMqttMsg);
-
-    return () => {
-      s.off("connect", onConnect);
-      s.off("disconnect", onDisconnect);
-      s.off("mqtt_msg", onMqttMsg);
-    };
-  }, []);
-
-  // auto scroll log
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = 0; // เรา prepend log ด้านบน
-    }
-  }, [log]);
-
-  /** publish คำสั่งไป MQTT ผ่าน server bridge */
-  function sendCommand(action: "open" | "close") {
-    // NOTE: ทำ ACL ตาม role ที่ฝั่ง server/mqttBridge.ts
-    const payload = JSON.stringify({ action, role });
-    const topic = `smartlocker/${nodeId}/slot/${slot}/command`;
-    try {
-      getSocket().emit("publish", { topic, message: payload });
-      setLog((prev) => [`[publish] ${topic} — ${payload}`, ...prev].slice(0, 500));
-    } catch (e) {
-      setLog((prev) => [`[error] cannot publish: ${String(e)}`, ...prev].slice(0, 500));
-    }
+  function doOpenSlot() {
+    if (!currentNode || currentSlot === "") return;
+    sendCommand(currentNode, Number(currentSlot), "openSlot");
+  }
+  function doOpenDoor() {
+    if (!currentNode || currentSlot === "") return;
+    sendCommand(currentNode, Number(currentSlot), "openDoor");
+  }
+  function doUnlockDoor() {
+    if (!currentNode || currentSlot === "") return;
+    sendCommand(currentNode, Number(currentSlot), "unlockDoor");
   }
 
-  const statusList = useMemo(
-    () =>
-      Object.entries(statusByKey).map(([key, st]) => ({
-        key,
-        node: st.node ?? "C01",
-        slot: String(st.slot ?? "1"),
-        available: st.available,
-        door: st.door_closed ? "closed" : "open",
-        capacity: st.capacity_mm,
-      })),
-    [statusByKey]
-  );
-
   return (
-    <div style={{ padding: 16, display: "grid", gap: 16 }}>
-      <header>
-        <h1>SmartLocker Dashboard</h1>
-        <p>Socket: {socketConnected ? "connected" : "disconnected"}</p>
-      </header>
+    <Box p={3}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}>
+        <Typography variant="h5" fontWeight={700}>SmartLocker Dashboard</Typography>
+        <Chip
+          label={connected ? "Bridge Connected" : "Disconnected"}
+          color={connected ? "success" : "default"}
+          icon={<CheckCircleIcon />}
+          variant={connected ? "filled" : "outlined"}
+        />
+      </Stack>
 
-      <section
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: 16,
-        }}
-      >
-        <div style={{ border: "1px solid #444", borderRadius: 12, padding: 12 }}>
-          <h3>Send Command</h3>
-          <div style={{ display: "grid", gap: 8 }}>
-            <label>
-              Node ID
-              <input
-                value={nodeId}
-                onChange={(e) => setNodeId(e.target.value)}
-                placeholder="C01"
-                style={{ width: "100%" }}
-              />
-            </label>
-            <label>
-              Slot
-              <input
-                value={slot}
-                onChange={(e) => setSlot(e.target.value)}
-                placeholder="1"
-                style={{ width: "100%" }}
-              />
-            </label>
-            <label>
-              Role
-              <select value={role} onChange={(e) => setRole(e.target.value as any)} style={{ width: "100%" }}>
-                <option value="student">student</option>
-                <option value="professor">professor</option>
-                <option value="admin">admin</option>
-              </select>
-            </label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => sendCommand("open")}>Open Door</button>
-              <button onClick={() => sendCommand("close")}>Close Door</button>
-            </div>
-          </div>
-        </div>
+      <Grid container spacing={2}>
+        {/* Controls */}
+        <Grid item xs={12} md={5}>
+          <Card sx={{ borderRadius: 3 }}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700}>Controls</Typography>
+              <Divider sx={{ my: 1.5 }} />
 
-        <div style={{ border: "1px solid #444", borderRadius: 12, padding: 12 }}>
-          <h3>Latest Slots</h3>
-          <div style={{ display: "grid", gap: 8 }}>
-            {statusList.length === 0 && <div>No slot status yet.</div>}
-            {statusList.map((s) => (
-              <div
-                key={s.key}
-                style={{
-                  border: "1px solid #666",
-                  borderRadius: 10,
-                  padding: 8,
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  gap: 8,
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <div>
-                    <b>{s.key}</b> — Node {s.node} / Slot {s.slot}
-                  </div>
-                  <div>
-                    {s.available ? "available" : "busy"} | door: {s.door} | {s.capacity} mm
-                  </div>
-                </div>
-                <button onClick={() => {
-                  setNodeId(s.node);
-                  setSlot(String(s.slot));
-                }}>
-                  Control
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
+              <Stack spacing={2}>
+                <FormControl fullWidth>
+                  <InputLabel id="role">Role</InputLabel>
+                  <Select labelId="role" label="Role" value={role} onChange={handleRole}>
+                    <MenuItem value="student">student</MenuItem>
+                    <MenuItem value="professor">professor</MenuItem>
+                    <MenuItem value="admin">admin</MenuItem>
+                  </Select>
+                </FormControl>
 
-        <div style={{ border: "1px solid #444", borderRadius: 12, padding: 12 }}>
-          <h3>Log</h3>
-          <div
-            ref={logRef}
-            style={{
-              height: 260,
-              overflow: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
-            {log.map((l, idx) => (
-              <div key={idx} style={{ fontFamily: "monospace", fontSize: 12 }}>
-                {l}
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-            <button onClick={() => setLog([])}>Clear</button>
-            <button onClick={() => navigator.clipboard.writeText(log.join("\n"))}>Copy</button>
-          </div>
-        </div>
-      </section>
-    </div>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                  <FormControl fullWidth>
+                    <InputLabel id="node">Node</InputLabel>
+                    <Select
+                      labelId="node" label="Node"
+                      value={node} onChange={(e) => { setNode(e.target.value); setManualNode(""); setSlot(""); }}
+                    >
+                      {nodes.length === 0 && <MenuItem value=""><em>— empty —</em></MenuItem>}
+                      {nodes.map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+
+                  <FormControl fullWidth>
+                    <InputLabel id="slot">Slot</InputLabel>
+                    <Select
+                      labelId="slot" label="Slot"
+                      value={slot === "" ? "" : String(slot)}
+                      onChange={(e) => setSlot(Number(e.target.value))}
+                      disabled={!node}
+                    >
+                      {!node && <MenuItem value=""><em>— select node first —</em></MenuItem>}
+                      {node && (slotsByNode[node] || []).map((s) =>
+                        <MenuItem key={s} value={String(s)}>{s}</MenuItem>
+                      )}
+                    </Select>
+                  </FormControl>
+                </Stack>
+
+                <Typography variant="body2" color="text.secondary">หรือกรอกเอง (เผื่อยังไม่มี status มา)</Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                  <TextField label="Manual Node" fullWidth value={manualNode}
+                             onChange={(e) => { setManualNode(e.target.value); setNode(""); }} />
+                  <TextField label="Manual Slot" type="number" fullWidth value={manualSlot}
+                             onChange={(e) => { setManualSlot(e.target.value === "" ? "" : Number(e.target.value)); setSlot(""); }} />
+                </Stack>
+
+                <Divider />
+
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                  <Button
+                    fullWidth variant="contained"
+                    onClick={doOpenSlot}
+                    disabled={!canOpenSlot || !currentNode || currentSlot === ""}
+                  >
+                    Open Slot
+                  </Button>
+                  <Button
+                    fullWidth variant="outlined"
+                    startIcon={<DoorFrontIcon />}
+                    onClick={doOpenDoor}
+                    disabled={!canOpenDoor || !currentNode || currentSlot === ""}
+                  >
+                    Open Door
+                  </Button>
+                  <Button
+                    fullWidth variant="outlined"
+                    startIcon={<LockOpenIcon />}
+                    onClick={doUnlockDoor}
+                    disabled={!canUnlockDoor || !currentNode || currentSlot === ""}
+                  >
+                    Unlock Door
+                  </Button>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Live status table */}
+        <Grid item xs={12} md={7}>
+          <Card sx={{ borderRadius: 3 }}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight={700}>Live Status</Typography>
+              <Divider sx={{ my: 1.5 }} />
+              <Box sx={{ maxHeight: 520, overflow: "auto" }}>
+                {Object.entries(statusByKey).length === 0 ? (
+                  <Typography color="text.secondary">Waiting for status…</Typography>
+                ) : (
+                  <Grid container spacing={1} columns={12}>
+                    {Object.entries(statusByKey).map(([key, st]) => {
+                      const [n, s] = key.split("-");
+                      return (
+                        <Grid item key={key} xs={12} sm={6} lg={4}>
+                          <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                            <CardContent>
+                              <Stack direction="row" justifyContent="space-between">
+                                <Typography fontWeight={700}>{n}</Typography>
+                                <Chip size="small" label={`Slot ${s}`} />
+                              </Stack>
+                              <Typography variant="body2" mt={1}>
+                                Capacity: <b>{st.capacity_mm} mm</b>
+                              </Typography>
+                              <Typography variant="body2">
+                                Available: <b>{st.available ? "Yes" : "No"}</b>
+                              </Typography>
+                              <Typography variant="body2">
+                                Door Closed: <b>{st.door_closed ? "Yes" : "No"}</b>
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                )}
+              </Box>
+
+              {selectedStatus && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="body2" color="text.secondary">
+                    Selected: <b>{currentNode}</b> / <b>Slot {currentSlot}</b> — Capacity <b>{selectedStatus.capacity_mm} mm</b>,
+                    Available <b>{selectedStatus.available ? "Yes" : "No"}</b>, Door Closed <b>{selectedStatus.door_closed ? "Yes" : "No"}</b>
+                  </Typography>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
   );
 }
